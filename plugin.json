@@ -1,0 +1,74 @@
+{
+  "id": "animation",
+  "kind": "plugin",
+  "version": "1.0.13",
+  "label": "UEFN Animation",
+  "description": "IK retargeting, skeleton sockets, Level Sequence / AnimSequence authoring. Bundles the animation skill.",
+  "min_app_version": "1.0.0",
+  "default_enabled": true,
+  "secret_keys": [],
+  "contributes": {
+    "agent.tools": {
+      "category": "animation",
+      "tools": [
+        "ik_retarget_capabilities",
+        "list_skeleton_bones",
+        "get_retarget_preset",
+        "get_ik_rig_info",
+        "get_ik_retargeter_info",
+        "create_ik_rig_asset",
+        "create_ik_retargeter_asset",
+        "set_retarget_root",
+        "add_retarget_chains",
+        "remove_retarget_chains",
+        "auto_map_retarget_chains",
+        "retarget_animation",
+        "retarget_animation_pipeline",
+        "list_skeleton_sockets",
+        "add_skeleton_socket",
+        "get_skeletal_mesh_info",
+        "remove_skeleton_socket",
+        "anim_author_capabilities",
+        "create_level_sequence",
+        "add_sequence_binding",
+        "add_transform_keys",
+        "get_sequence_info",
+        "create_anim_sequence",
+        "set_anim_bone_keys",
+        "get_anim_sequence_info"
+      ],
+      "intent_pattern": "\\b(anim|retarget|ik\\s*rig|skeleton|sequencer|level\\s*sequence)\\b",
+      "plan_tools": [
+        "ik_retarget_capabilities",
+        "list_skeleton_bones",
+        "list_skeleton_sockets",
+        "get_skeletal_mesh_info",
+        "get_retarget_preset",
+        "get_ik_rig_info",
+        "get_ik_retargeter_info",
+        "anim_author_capabilities",
+        "get_sequence_info",
+        "get_anim_sequence_info"
+      ]
+    },
+    "walkthrough": {
+      "id": "animation",
+      "title": "Animation tools ready",
+      "auto_start": "first_enable",
+      "settings_tab": "Store",
+      "steps": [
+        {
+          "target": "settings.store.root",
+          "title": "Animation tools ready",
+          "body": "Animation MCP tools and the animation skill are live. Ask the agent to retarget, author sequences, or inspect skeleton sockets.",
+          "advance": "next",
+          "mode": "rect"
+        }
+      ]
+    }
+  },
+  "backend": {
+    "entry": "backend",
+    "register": "register"
+  }
+}
