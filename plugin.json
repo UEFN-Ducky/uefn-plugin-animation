@@ -1,7 +1,7 @@
 {
   "id": "animation",
   "kind": "plugin",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "label": "UEFN Animation",
   "description": "IK retargeting, skeleton sockets, Level Sequence / AnimSequence authoring. Bundles the animation skill.",
   "min_app_version": "1.0.0",
