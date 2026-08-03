@@ -5,7 +5,7 @@ description: "Create, import, retarget, bake, and PLAY custom skeletal animation
 license: Ducky Source-Available License v1.0
 metadata:
   label: UEFN Animation
-  version: 15
+  version: 16
   managed_by: uefn-ducky
   author: UEFN-Ducky
   copyright: Copyright 2026 UEFN-Ducky
@@ -13,6 +13,12 @@ metadata:
 ---
 
 # UEFN skeletal animation
+
+**CRITICAL — editor mutations are SERIAL:** one heavy MCP call (`spawn_actor`,
+`set_actor_*`, `save_current_level`, bake/retarget tools) → wait → next. Never
+parallel or same-turn multi spawn/wire/save — freezes UEFN. A single tool may
+accept many `anim_paths` in **one** call (serial MCP, not parallel tools).
+Details: `skill_read_subskill("uefn", "batch_commands")`.
 
 UEFN is not full Unreal: AnimBlueprints, Montages, `AnimationLibrary`, and
 animation modifiers are not the path here. Authoring happens in Sequencer, the
