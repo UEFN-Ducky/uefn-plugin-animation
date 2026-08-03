@@ -60,8 +60,11 @@ Follow the full **retargeting** reference. Short path:
 4. `retarget_animation` with **all** needed anim paths in one batch (`suffix` optional).
 5. `save_asset` / `save_directory` → `save_current_level`.
 
-Reuse one retargeter for every clip on that source→target pair. If pose floats or
-T-poses, fix **retarget pose**, not chain names.
+Reuse one retargeter for every clip on that source→target pair. If the result
+floats or T-poses, fix the **retarget pose**, not chain names:
+`create_retarget_pose` + `set_retarget_pose_bone_rotation` /
+`set_retarget_pose_root_offset`, then re-bake one clip and look before batching
+the rest (`retargeting` §3b).
 
 ---
 

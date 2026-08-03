@@ -1,9 +1,9 @@
 ---
-description: "Step-by-step IK Rig + IK Retargeter workflow, the Biped-vs-Mannequin chain trap, explicit chains, and troubleshooting"
+description: "Step-by-step IK Rig + IK Retargeter workflow, the Biped-vs-Mannequin chain trap, explicit chains, retarget-pose (A-pose vs T-pose) fixes, and troubleshooting"
 metadata:
   label: "Retargeting (step by step)"
   default_enabled: false
-  load_condition: "Retargeting an animation, building an IK Rig/Retargeter, or chains/preset came back unknown or skipped"
+  load_condition: "Retargeting an animation, building an IK Rig/Retargeter, fixing a bad retarget pose, or chains/preset came back unknown or skipped"
 ---
 
 # IK Rig retargeting — the manual stages
@@ -48,8 +48,11 @@ and Verse `@editable` slots do not point at broken originals.
 
 ## Preset chain tables
 
-`create_ik_rig` with `chain_preset="auto"` picks one of these from the bones.
-Chain **names are identical** across presets so any source maps to any target.
+`create_ik_rig_asset` returns a `preset_guess` from the bone names; pass that name
+to `get_retarget_preset` and feed its `chains` to `add_retarget_chains`
+(`retarget_animation_pipeline` does the same automatically via
+`source_preset` / `target_preset = "auto"`). Chain **names are identical** across
+presets so any source maps to any target.
 
 **Biped** (root `Bip001-Pelvis`) — validated on Corpse_Sword:
 
@@ -69,8 +72,9 @@ LeftArm `upperarm_l→hand_l`, RightArm `upperarm_r→hand_r`, LeftLeg
 `thigh_l→foot_l`, RightLeg `thigh_r→foot_r`, clavicles `clavicle_*`.
 
 Any chain whose start/end bone isn't in the skeleton is **skipped** and listed in
-`steps.chains_skipped` — read that; it usually means a naming variant (e.g.
-`Bip001 Neck` with a space, or no `Bip001-Head`). Fix with `add_retarget_chains`.
+the `skipped` array of the `add_retarget_chains` response (with the reason) — read
+that; it usually means a naming variant (e.g. `Bip001 Neck` with a space, or no
+`Bip001-Head`). Fix the names and re-add with `replace_existing: true`.
 
 ## 1 & 2. Source and target IK Rigs (create + change primitives)
 
@@ -104,9 +108,34 @@ create_ik_retargeter_asset({"source_ik_rig_path": "/VideoTest/Retargeting/IK_Cor
 auto_map_retarget_chains({"ik_retargeter_path": "/VideoTest/Retargeting/RTG_Corpse_to_Archer"})
 ```
 
-Auto-map pairs chains by identical name. If it shows `auto_map_error` or the pose
-is bad, the **retarget pose** (A-pose vs T-pose) needs aligning on the
-`IKRetargeterController` (inspect with `describe_class`) — that's pose, not chains.
+Auto-map pairs chains by identical name.
+
+## 3b. Retarget pose (A-pose vs T-pose) — when the result looks wrong
+
+If chains map fine but the baked result floats, twists, or holds the arms at the
+wrong angle, the two skeletons' **rest poses** disagree. Fix the pose on the
+retargeter — never rebuild chains for it, and never copy bones between skeletons.
+
+```
+get_retarget_pose_info({"ik_retargeter_path": ".../RTG_Corpse_to_Archer"})
+# -> {"poses": ["Default"], "current_pose_offsets": {...}}
+create_retarget_pose({"ik_retargeter_path": ".../RTG_Corpse_to_Archer",
+    "name": "MatchSource"})                       # created on the target side, selected
+set_retarget_pose_bone_rotation({"ik_retargeter_path": ".../RTG_Corpse_to_Archer",
+    "bone": "upperarm_l", "rotation": [0, 0, -45]})   # [pitch,yaw,roll] degrees
+set_retarget_pose_bone_rotation({"ik_retargeter_path": "...",
+    "bone": "upperarm_r", "rotation": [0, 0, 45]})
+set_retarget_pose_root_offset({"ik_retargeter_path": "...", "offset": [0, 0, -4]})
+retarget_animation({...})                         # re-bake, look, adjust
+```
+
+- `source_or_target` defaults to `"target"`; pass `"source"` to edit the other side.
+- Rotations are offsets from the rest pose, so ±45° on each upper arm turns a
+  T-pose into an A-pose (and vice versa).
+- Iterate: pose → re-bake one clip → inspect → adjust. Only batch the rest once
+  the single clip looks right.
+- `set_current_retarget_pose` switches between poses you have already made
+  (e.g. one per source character).
 
 ## 4. Bake the animation
 
@@ -126,23 +155,25 @@ Pass every anim path in `anim_paths` to batch a whole folder through one retarge
 | `preset_guess: unknown` | custom bone names | `list_skeleton_bones`, then pass explicit `chains` to `add_retarget_chains` |
 | chain in `chains_skipped` | start/end bone name variant | correct it, `add_retarget_chains(..., replace_existing=true)` |
 | `create_asset returned None` | bad `dest_folder` or name clash | check folder / pick a new name |
-| `retarget_root not found` in steps | wrong method this build | `describe_class("IKRigController")`, use reported name via `execute_python` |
-| Baked anim floats / T-poses | retarget pose mismatch | align source/target retarget pose on the retargeter |
-| `batch retarget API differs` | UE changed the bake API | read `batch_operation_methods` in the response, drive via `execute_python` |
-| Foot IK skates on MetaHuman | MH skeleton missing Mannequin IK virtual bones | Copy `ik_foot_root` / `ik_foot_l` / `ik_foot_r` (and hand IK equivalents if needed) from `SKM_Manny_Simple` onto the MH skeleton; re-save. Prefer Common `RTG_metahuman` / `IK_MetaHuman` for Mannequin→MH body clips. |
+| `set_retarget_root not found` | wrong method this build | read `controller_methods` in the response; the tools self-report what exists |
+| Baked anim floats / T-poses / arms wrong | retarget pose mismatch | §3b — `create_retarget_pose` + `set_retarget_pose_bone_rotation`, then re-bake |
+| Feet skate or sink | root height / rest-pose offset | `set_retarget_pose_root_offset` on the target side |
+| `batch retarget API differs` | UE changed the bake API | read `batch_operation_methods` in the response and adapt |
 
 ### MetaHuman ↔ Mannequin
 
 Assembled MetaHumans ship (or share) Common assets **`RTG_metahuman`** and
 **`IK_MetaHuman`**. Use those for Mannequin/FN → MH body locomotion when present
-instead of reinventing chains. Full MH create/spawn path:
+instead of reinventing chains, and correct any remaining pose difference with the
+retarget-pose tools in §3b. Full MH create/spawn path:
 `skill_read_subskill("metahuman", "npc_spawn")`.
 
-## Other anim editing (no retarget)
+## Not the UEFN path
 
-- **AnimSequence / Montage**: `AssetToolsHelpers.create_asset` + matching factory;
-  edit with `AnimationLibrary`.
-- **Notifies**: `AnimationLibrary.add_animation_notify_event(...)`.
-- **Modifiers**: `AnimationModifierLibrary` — batch across a folder.
+Montages, `AnimationLibrary` notifies, `AnimationModifierLibrary`, and
+AnimBlueprint editing are full-Unreal APIs — don't drive them through
+`execute_python` here. Author in Sequencer and bake
+(`skill_read_subskill("animation", "anim_authoring")`); play through a device or
+AnimPreset (`skill_read_subskill("animation", "runtime_playback")`).
 
 Finish with `save_asset`/`save_directory` then `save_current_level`.

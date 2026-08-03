@@ -1,10 +1,10 @@
 {
   "id": "animation",
   "kind": "plugin",
-  "version": "1.0.14",
+  "version": "1.2.0",
   "label": "UEFN Animation",
-  "description": "IK retargeting, skeleton sockets, Level Sequence / AnimSequence authoring. Bundles the animation skill.",
-  "min_app_version": "1.0.0",
+  "description": "IK retargeting with retarget-pose fixes, skeleton sockets, Level Sequence / AnimSequence authoring, sequence bake, additive AnimType for player overlays, and Animated Mesh device playback. Bundles the animation skill.",
+  "min_app_version": "1.0.655",
   "default_enabled": true,
   "secret_keys": [],
   "contributes": {
@@ -22,6 +22,11 @@
         "add_retarget_chains",
         "remove_retarget_chains",
         "auto_map_retarget_chains",
+        "get_retarget_pose_info",
+        "create_retarget_pose",
+        "set_current_retarget_pose",
+        "set_retarget_pose_bone_rotation",
+        "set_retarget_pose_root_offset",
         "retarget_animation",
         "retarget_animation_pipeline",
         "list_skeleton_sockets",
@@ -35,9 +40,13 @@
         "get_sequence_info",
         "create_anim_sequence",
         "set_anim_bone_keys",
-        "get_anim_sequence_info"
+        "get_anim_sequence_info",
+        "set_anim_additive_type",
+        "bake_sequence_to_anim",
+        "animated_mesh_capabilities",
+        "configure_animated_mesh"
       ],
-      "intent_pattern": "\\b(anim|retarget|ik\\s*rig|skeleton|sequencer|level\\s*sequence)\\b",
+      "intent_pattern": "\\b(anim|retarget|ik\\s*rig|skeleton|sequencer|level\\s*sequence|animated\\s*mesh|control\\s*rig|mixamo|additive|player\\s*anim)\\b",
       "plan_tools": [
         "ik_retarget_capabilities",
         "list_skeleton_bones",
@@ -46,7 +55,9 @@
         "get_retarget_preset",
         "get_ik_rig_info",
         "get_ik_retargeter_info",
+        "get_retarget_pose_info",
         "anim_author_capabilities",
+        "animated_mesh_capabilities",
         "get_sequence_info",
         "get_anim_sequence_info"
       ]

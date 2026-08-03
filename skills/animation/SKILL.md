@@ -1,41 +1,143 @@
 ---
 source_plugin_id: animation
 name: animation
-description: "Retarget animations between skeletal meshes, CREATE custom animations (Verse prop keyframes, Level Sequences, AnimSequence bone keys), and attach items/props to NPC skeletons in UEFN — composable IK Rig / IK Retargeter, sequencer, and socket tools, plus an FBX fallback"
-license: All Rights Reserved
+description: "Create, import, retarget, bake, and PLAY custom skeletal animations in UEFN — Control Rig / Level Sequence authoring, Mixamo & FBX import, IK Rig + IK Retargeter with retarget-pose fixes, bake to AnimSequence, Animated Mesh device playback, player GetPlayAnimationController (full override + additive overlay), NPC AnimPresets, and skeleton sockets"
+license: Ducky Source-Available License v1.0
 metadata:
   label: UEFN Animation
-  version: 13
+  version: 15
   managed_by: uefn-ducky
   author: UEFN-Ducky
   copyright: Copyright 2026 UEFN-Ducky
   allow_redistribute: false
 ---
 
-# UEFN Animation — retarget, edit, and CREATE
+# UEFN skeletal animation
 
-Two capability families: **retargeting** (convert an animation authored for
-one skeletal mesh onto another skeleton — this file) and **authoring** (create
-new animations: Verse prop keyframes, Level Sequences for the Cinematic
-Sequence device, AnimSequence bone keys — see the **Creating animations**
-reference; probe with `anim_author_capabilities`).
+UEFN is not full Unreal: AnimBlueprints, Montages, `AnimationLibrary`, and
+animation modifiers are not the path here. Authoring happens in Sequencer, the
+result is always an **AnimSequence**, and playback is a **device, an AnimPreset,
+or Verse** — never "press Play in Sequencer".
 
-The tools are **small composable primitives** — read one thing, create one
-thing, change one thing — so you chain them for the task at hand. Don't reach for
-the all-in-one pipeline unless the case is the plain one.
+## The facts that decide everything
+
+- **Only skeletal meshes animate.** Static meshes must be converted first. Stock
+  rig: FN Mannequin (Content Browser → Fortnite → search "FN"). Player body:
+  **M_Medium_Base**.
+- **Animations are skeleton-specific.** A clip authored for skeleton A is not
+  even offered on skeleton B until it is **retargeted**.
+- **Skeletal mesh actors expose Animation to Play** with Looping, Playing,
+  Initial Position, Play Rate — fine for editor preview, not a runtime trigger.
+- **Authoring ≠ playback.** Sequencer/Control Rig author; at runtime an Animated
+  Mesh device, a Cinematic Sequence device, an NPC AnimPreset, or Verse
+  (`GetPlayAnimationController` on the player / NPC) plays it.
+- Animation sets count against island memory — bake what you ship, not the pack.
+
+## Pick the route
+
+| Goal | Route | Tools |
+|------|-------|-------|
+| Hand-author body motion | Control Rig in a Level Sequence → bake | editor UI + `bake_sequence_to_anim` |
+| Bring in a Mixamo / FBX clip | Import onto the target skeleton | `import_asset` (see `anim_authoring`) |
+| Same clip on a different skeleton | IK Rig + IK Retargeter + bake | `create_ik_rig_asset` … `retarget_animation` |
+| Simple wave / nod / idle / pose | AnimSequence bone keys | `create_anim_sequence`, `set_anim_bone_keys` |
+| Move a prop (platform, door) | Verse `animation_controller` | Verse only, no assets |
+| Cutscene / camera choreography | Level Sequence + Cinematic Sequence device | `create_level_sequence`, `add_transform_keys` |
+| Play a clip in game on a mesh | **Animated Mesh device** | `animated_mesh_capabilities`, `configure_animated_mesh` |
+| Play a clip on the **PLAYER** character | Verse `GetPlayAnimationController` (+ optional additive) | Verse + `set_anim_additive_type` |
+| NPC locomotion / attacks | AnimPreset + NPCCharacterDefinition | `npc_characters` reference |
+
+Probe first: `ik_retarget_capabilities({})` for the retarget family,
+`anim_author_capabilities({})` for the authoring/bake/additive family. Both
+report which routes this UEFN build actually exposes; if a route is false, the
+reference file names the editor-UI equivalent.
 
 ## The tools (flat MCP tools)
 
 | Kind | Tools |
 |------|-------|
-| **READ** | `ik_retarget_capabilities`, `list_skeleton_bones`, `get_retarget_preset`, `get_ik_rig_info`, `get_ik_retargeter_info`, `list_skeleton_sockets` |
-| **CREATE** | `create_ik_rig_asset`, `create_ik_retargeter_asset` |
-| **CHANGE** | `set_retarget_root`, `add_retarget_chains`, `remove_retarget_chains`, `auto_map_retarget_chains`, `add_skeleton_socket`, `remove_skeleton_socket` |
-| **BAKE** | `retarget_animation` |
+| **PROBE** | `ik_retarget_capabilities`, `anim_author_capabilities`, `animated_mesh_capabilities` |
+| **READ** | `list_skeleton_bones`, `get_retarget_preset`, `get_ik_rig_info`, `get_ik_retargeter_info`, `get_retarget_pose_info`, `get_sequence_info`, `get_anim_sequence_info`, `get_skeletal_mesh_info`, `list_skeleton_sockets` |
+| **CREATE** | `create_ik_rig_asset`, `create_ik_retargeter_asset`, `create_retarget_pose`, `create_level_sequence`, `create_anim_sequence` |
+| **CHANGE** | `set_retarget_root`, `add_retarget_chains`, `remove_retarget_chains`, `auto_map_retarget_chains`, `set_current_retarget_pose`, `set_retarget_pose_bone_rotation`, `set_retarget_pose_root_offset`, `add_sequence_binding`, `add_transform_keys`, `set_anim_bone_keys`, `set_anim_additive_type`, `add_skeleton_socket`, `remove_skeleton_socket` |
+| **BAKE** | `retarget_animation`, `bake_sequence_to_anim` |
+| **PLAY** | `configure_animated_mesh` |
 | **COMPOSE** | `retarget_animation_pipeline` (convenience only) |
 
-Always `ik_retarget_capabilities({})` first. If `available` is false,
-skip these and use the **FBX fallback** below.
+They are small composable primitives — read one thing, create one thing, change
+one thing — so you chain them for the task at hand. Don't reach for the
+all-in-one pipeline unless the case is the plain one.
+
+## Retarget: the normal chain
+
+```
+# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
+ik_retarget_capabilities({})                                  # PROBE
+create_ik_rig_asset({"skeletal_mesh_path": ".../SourceMesh",
+    "dest_folder": "/VideoTest/Retargeting", "name": "IK_Source"})        # -> preset_guess: "biped"
+get_retarget_preset({"name": "biped"})                        # READ -> root + chains
+set_retarget_root({"ik_rig_path": ".../IK_Source", "bone": "Bip001-Pelvis"})
+add_retarget_chains({"ik_rig_path": ".../IK_Source", "chains": [ ...preset... ]})
+# repeat CREATE + CHANGE for the target mesh (IK_Target) ...
+create_ik_retargeter_asset({"source_ik_rig_path": ".../IK_Source",
+    "target_ik_rig_path": ".../IK_Target", "dest_folder": "/VideoTest/Retargeting",
+    "name": "RTG_Source_to_Target"})
+auto_map_retarget_chains({"ik_retargeter_path": ".../RTG_Source_to_Target"})
+retarget_animation({"ik_retargeter_path": ".../RTG_Source_to_Target",
+    "source_mesh_path": ".../SourceMesh", "target_mesh_path": ".../TargetMesh",
+    "anim_paths": [".../SomeAnimSequence"]})                              # BAKE (batch)
+save_current_level()
+```
+
+**Rest poses differ (A-pose vs T-pose)?** That is a *pose* problem, not a chain
+problem, and the fix is on the retargeter — never copy bones between skeletons:
+
+```
+get_retarget_pose_info({"ik_retargeter_path": ".../RTG_Source_to_Target"})
+create_retarget_pose({"ik_retargeter_path": "...", "name": "MatchSource"})
+set_retarget_pose_bone_rotation({"ik_retargeter_path": "...",
+    "bone": "upperarm_l", "rotation": [0, 0, -45]})   # [pitch,yaw,roll] deg, target side
+retarget_animation({...})                             # re-bake and look again
+```
+
+Because the primitives are separate you can also reuse an existing rig and just
+call `add_retarget_chains`; verify with `get_ik_rig_info`; batch many anims in one
+`retarget_animation`; or `remove_retarget_chains` + re-add to fix one limb.
+
+## Author → bake → play (the Control Rig path)
+
+1. Level Sequence + FK Control Rig on the actor, key the controls (editor UI —
+   Animation Mode on, Game View off).
+2. Trim the sequence playback range to the motion; the bake covers that range.
+3. `bake_sequence_to_anim({"sequence_path": "...", "actor_path": "MyMannequin",
+   "dest_folder": "/VideoTest/Anims", "name": "AS_Wave"})` — the scripted form of
+   right-click track → **Bake Animation Sequence**.
+4. Play it: `animated_mesh_capabilities({})` → `spawn_actor` the device →
+   `configure_animated_mesh({"actor_path": "AnimMesh_Statue",
+   "skeletal_mesh_path": "...", "anim_path": ".../AS_Wave", "loop": true})`.
+
+Full step-by-step, Mixamo import settings, blending, and moving an actor while it
+animates: `skill_read_subskill("animation", "anim_authoring")`.
+
+## Play a clip on the PLAYER character
+
+Players are not Animated Mesh devices. Use Verse:
+
+```
+Agent.GetFortCharacter[] → FortCharacter.GetPlayAnimationController[]
+→ AnimController.Play(Clip, ?BlendInTime := …, ?BlendOutTime := …)
+→ hold the play_animation_instance (Await / Stop)
+```
+
+- **Full override** (dances, cutscene poses): leave Additive Anim Type = No Additive.
+- **Overlay on Fortnite locomotion** (arm wave, giant/tiny scale): author with a
+  **Layered** Control Rig on `M_Medium_Base`, bake, then
+  `set_anim_additive_type({"anim_paths": ["…"], "additive_type": "local_space"})`
+  (Property Matrix → Local Space if the tool is unavailable).
+
+Optional: `PutInStasis` / `ReleaseFromStasis`, `TeleportTo` for framed beats.
+Full device, additive authoring, and limits:
+`skill_read_subskill("animation", "player_animation")`.
 
 ## Skeleton sockets (attach props to bones)
 
@@ -44,78 +146,24 @@ the dedicated tools — **never** via `execute_python` (`unreal.SkeletalMeshSock
 direct construction is a native crash that kills the whole editor, and Blueprint
 SCS/component surgery is blocked for the same reason).
 
-The full chain, all thin tools:
-
 ```
-get_skeletal_mesh_info({"asset_path": ".../SomeMesh"})            # READ: bones+sockets+materials+bounds in one call
+get_skeletal_mesh_info({"asset_path": ".../SomeMesh"})            # bones+sockets+materials+bounds
 add_skeleton_socket({"asset_path": ".../SomeMesh",
     "bone_name": "Bip001-Head", "socket_name": "HatSocket",
-    "location": [0, 0, 12]})                                      # CHANGE (saves the Skeleton asset)
-spawn_actor({"asset_path": ".../SomeHatMesh"})                    # the prop as its own actor
+    "location": [0, 0, 12]})                                      # saves the Skeleton asset
+spawn_actor({"asset_path": ".../SomeHatMesh"})
 attach_actor({"child_path": "SomeHat", "parent_path": "SomeCharacter",
-    "socket": "HatSocket", "rule": "snap_to_target"})             # snaps onto the socket
+    "socket": "HatSocket", "rule": "snap_to_target"})
 get_actor_bone_transform({"actor_path": "SomeCharacter",
-    "socket_or_bone": "HatSocket"})                               # READ: verify placement
-add_skeleton_socket({..., "update_existing": true,
-    "location": [0, 2, 14]})                                      # iterate the fit
+    "socket_or_bone": "HatSocket"})                               # verify placement
+add_skeleton_socket({..., "update_existing": true, "location": [0, 2, 14]})
 save_current_level()
 ```
 
-Also: `list_actor_components` shows how a placed actor is built (never probe
-Blueprint CDOs via execute_python); `remove_skeleton_socket` cleans up;
-`attach_actor` without `rule` keeps world position (re-parent without moving).
-
-Notes: sockets live on the **Skeleton asset**, shared by every mesh using that
-skeleton — including runtime-spawned characters (NPC definitions). Editor
-`attach_actor` only affects actors placed in the level; runtime-spawned NPCs
-need the attachment done by gameplay (Verse) or content setup, but the socket
-itself is already there for them.
-
-For the full items-on-NPCs workflow — finding/creating the item mesh, sizing
-it, bone/socket naming across skeleton types, runtime-NPC options, and the
-attach-vs-grant distinction —
-`skill_read_subskill("animation", "npc_items")`.
-
-For **custom NPC characters** (restore old UE4 packs → retarget → AnimPreset →
-`NPCCharacterDefinition` → spawner):
-`skill_read_subskill("animation", "npc_characters")`. Verse AI loops:
-`skill_read_subskill("verse", "sys_npc_ai")`.
-
-## Chain the primitives (the normal path)
-
-```
-# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
-ik_retarget_capabilities({})                                  # READ
-create_ik_rig_asset({"skeletal_mesh_path": ".../SourceMesh",
-    "dest_folder": "/VideoTest/Retargeting", "name": "IK_Source"})        # CREATE -> preset_guess: "biped"
-get_retarget_preset({"name": "biped"})                        # READ -> root + chains
-set_retarget_root({"ik_rig_path": ".../IK_Source", "bone": "Bip001-Pelvis"})   # CHANGE
-add_retarget_chains({"ik_rig_path": ".../IK_Source", "chains": [ ...preset... ]}) # CHANGE
-# repeat CREATE + CHANGE for the target mesh (IK_Target) ...
-create_ik_retargeter_asset({"source_ik_rig_path": ".../IK_Source",
-    "target_ik_rig_path": ".../IK_Target", "dest_folder": "/VideoTest/Retargeting",
-    "name": "RTG_Source_to_Target"})                                      # CREATE
-auto_map_retarget_chains({"ik_retargeter_path": ".../RTG_Source_to_Target"})     # CHANGE
-retarget_animation({"ik_retargeter_path": ".../RTG_Source_to_Target",
-    "source_mesh_path": ".../SourceMesh", "target_mesh_path": ".../TargetMesh",
-    "anim_paths": [".../SomeAnimSequence"]})                              # BAKE
-save_current_level()
-```
-
-Because they're separate, you can also: reuse an existing rig and just call
-`add_retarget_chains`; `get_ik_rig_info` to verify chains; batch many anims in one
-`retarget_animation`; or `remove_retarget_chains` + re-add to fix one limb.
-
-## Convenience wrapper (plain case only)
-
-```
-retarget_animation_pipeline({"source_mesh_path": ".../SourceMesh",
-    "target_mesh_path": ".../TargetMesh", "anim_path": ".../SomeAnimSequence"})
-```
-
-It just chains the primitives above with `preset:"auto"`. Read its
-`report.*.chains.skipped` — if a preset is `unknown`, fall back to the primitives
-and `skill_read_subskill("animation", "retargeting")`.
+Sockets live on the **Skeleton asset**, shared by every mesh using that skeleton —
+including runtime-spawned NPCs. Editor `attach_actor` only affects placed actors;
+runtime NPCs need the attachment done by gameplay, but the socket is already there.
+Full items-on-NPCs workflow: `skill_read_subskill("animation", "npc_items")`.
 
 ## Hard rules
 
@@ -124,15 +172,26 @@ and `skill_read_subskill("animation", "retargeting")`.
   so it matches nothing and makes ZERO chains — the #1 retarget failure. Use
   `get_retarget_preset` + `add_retarget_chains` instead of the engine auto button.
 - **Every tool self-reports.** On a method miss it returns the members that ARE on
-  the class (`controller_methods`, `batch_operation_methods`) — read that and adapt
-  via `execute_python`; don't retry blindly.
+  the class (`controller_methods`, `batch_operation_methods`) — read that and adapt;
+  don't retry blindly.
 - **Source and target chain names must match exactly** (`Spine`, `LeftArm`, …) or
   `auto_map_retarget_chains` can't pair them. The presets guarantee this.
 - **Paths use the project mount** from `get_project_info().content_root`
   (e.g. `/VideoTest/Retargeting`) — never invent `/Game/...` for new assets.
   Omit `dest_folder` / pass empty to let the listener auto-pin.
+- **Never publish on Verse `PlaySkeletalAnimation`** (experimental Scene Graph
+  animation): islands using it cannot be published, and enabling the flag renames
+  legacy `animation_sequence` assets with an `_asset` postfix, breaking existing
+  Verse compilation. Ship the Animated Mesh device / AnimPreset / player
+  `GetPlayAnimationController` instead.
+- **Player anim controller resets** if the player emotes or fires a weapon —
+  design around it (`AllowEmotes := false` in stasis, short clips, or accept the
+  pop). Root/bone **scale overlays are visual only**; hitboxes do not follow.
+- **Do not use full-Unreal animation APIs** via `execute_python` — Montages,
+  `AnimationLibrary` notifies, `AnimationModifierLibrary`, AnimBlueprint editing
+  and Control Rig graph surgery are not the UEFN path.
 
-## FBX fallback (API not available)
+## FBX fallback (retarget API not available)
 
 If `ik_retarget_capabilities` reports `available: false`: `export_asset` the source
 AnimSequence to FBX, then `import_asset` it back onto the **target** skeletal mesh
@@ -144,16 +203,24 @@ AnimSequence to FBX, then `import_asset` it back onto the **target** skeletal me
 
 ## Reference files
 
-- `references/retargeting.md` — IK Rig + IK Retargeter step-by-step, Biped trap, UE4 pack restore prep
+Tags: [yours]=you created, [store]=Store, [shipped]=bundled, [plugin]=plugin.
+
+Load with MCP `skill_read_subskill("animation", "<id>")` when needed. Do **not** use the IDE Read/open-file tool on `~/.claude/skills`, `~/.cursor/skills`, or `references/*.md` paths (outside the project workspace — permission prompts / always errors).
+
+- `anim_authoring` [plugin] — Control Rig authoring + Bake Animation Sequence, Mixamo/FBX import settings, Layered Control Rig additive overlays, AnimSequence bone keys, Verse prop keyframes, blending and moving an actor mid-animation, plus animation design principles
+  Load when: Creating or importing an animation (Control Rig, Mixamo, FBX, hand-keyed motion) rather than retargeting an existing one
+- `player_animation` [plugin] — Play clips on the PLAYER via `GetPlayAnimationController` — full override vs Additive Local Space overlay, Layered Control Rig authoring, stasis/teleport, Assets digest, emote/fire reset and hitbox limits
+  Load when: Playing a custom animation on the player character, additive/overlay player anims, giant/tiny player, weapon inspect, or melee on the player
+- `runtime_playback` [plugin] — Making an animation actually play in game: Animated Mesh device, Cinematic Sequence device, NPC AnimPresets, player anim controller, and why the Verse Scene Graph API is not publishable
+  Load when: An animation exists but nothing plays it, or choosing between device / preset / Verse playback
+- `retargeting` [plugin] — Step-by-step IK Rig + IK Retargeter workflow, the Biped-vs-Mannequin chain trap, retarget-pose (A-pose vs T-pose) fixes, and troubleshooting
   Load when: Retargeting an animation, building an IK Rig/Retargeter, or chains/preset came back unknown or skipped
-- `references/anim_authoring.md` — Creating Level Sequences / AnimSequence bone keys / Verse prop keyframes
-  Load when: Authoring a new animation (not retargeting an existing one)
-- `references/sequencer_cinematics.md` — Cameras, cuts, Cinematic Sequence device, multi-actor choreography
-  Load when: Cutscenes, cine cameras, device playback, or multi-actor Level Sequences
-- `references/npc_items.md` — Items/props on NPCs — sockets, attach, verify
-  Load when: Putting an item, prop, weapon, hat, or accessory on an NPC or skeletal character
-- `references/npc_characters.md` — Restore UE4 skeletons → retarget → AnimPreset → NPCCharacterDefinition → spawner
+- `npc_characters` [plugin] — NPC character pipeline — restore old UE4 skeletons/anims, retarget, AnimPreset_BasicLocomotion, NPCCharacterDefinition modifiers, and wire npc_spawner_device
   Load when: Building NPCCharacterDefinition assets, AnimPresets, restoring imported UE4 enemy packs, or wiring custom mesh NPCs to Verse behaviors
+- `npc_items` [plugin] — Items/props on NPCs — create or find the item mesh, socket the skeleton, attach, verify, iterate; runtime-NPC caveats and the grant-vs-attach distinction
+  Load when: Putting an item, prop, weapon, hat, or accessory on an NPC or any skeletal character
+- `sequencer_cinematics` [plugin] — Level Sequence cinematics — cine camera, cuts, spawnables vs possessables, Cinematic Sequence device wiring, multi-actor choreography
+  Load when: User wants a cutscene, cinematic, camera sequence, Cinematic Sequence device, or multi-actor choreography
 
 **MetaHuman NPCs** (Creator / Mesh to MH / UEFN Export assemble / MH-specific
 physics + spawn): install the MetaHuman Store plugin, then

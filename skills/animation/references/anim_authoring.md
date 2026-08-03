@@ -1,26 +1,131 @@
 ---
-description: "Creating custom animations in UEFN — three routes: Verse animation_controller keyframes on props (runtime), Level Sequence tools + Cinematic Sequence device (cutscenes/choreography), and AnimSequence bone keyframes (skeletal motion) — plus animation design principles"
+description: "Creating animations in UEFN — Control Rig in a Level Sequence then Bake Animation Sequence, Layered Control Rig additive overlays, Mixamo/FBX import, AnimSequence bone keys, Verse prop keyframes, blending and moving an actor mid-animation, plus animation design principles"
 metadata:
   label: "Creating animations"
   default_enabled: false
-  load_condition: "User wants to CREATE/author an animation (moving platform, door, cutscene, camera move, custom skeletal motion) rather than retarget an existing one"
+  load_condition: "User wants to CREATE or IMPORT an animation (Control Rig, Mixamo, FBX, hand-keyed skeletal motion, moving platform, cutscene) rather than retarget an existing one"
 ---
 
 # Creating animations — pick the route first
 
 | Route | What moves | Where it runs | Tools |
 |-------|-----------|---------------|-------|
-| 1. Verse `animation_controller` | Creative props (transform only) | Runtime, in game | Verse code only |
-| 2. Level Sequence | Any bound actor + cameras | Editor-authored, played by Cinematic Sequence device | `create_level_sequence`, `add_sequence_binding`, `add_transform_keys` |
-| 3. AnimSequence bone keys | Skeleton bones | Editor asset, played on skeletal meshes | `create_anim_sequence`, `set_anim_bone_keys` |
+| 1. Control Rig → bake | Skeleton bones | Editor authoring, output is an AnimSequence | Sequencer UI + `bake_sequence_to_anim` |
+| 1b. **Layered** Control Rig → bake → additive | Bone **deltas** (player overlay) | AnimSequence with Additive Local Space | Sequencer UI + `set_anim_additive_type` |
+| 2. FBX / Mixamo import | Skeleton bones | Imported AnimSequence | `import_asset` |
+| 3. AnimSequence bone keys | Skeleton bones | Editor asset | `create_anim_sequence`, `set_anim_bone_keys` |
+| 4. Verse `animation_controller` | Creative props (transform only) | Runtime, in game | Verse code only |
+| 5. Level Sequence transform track | Any bound actor + cameras | Cinematic Sequence device | `create_level_sequence`, `add_transform_keys` |
 
-For routes 2–3, `anim_author_capabilities({})` FIRST — UEFN builds vary in what
-they expose; the probe says which routes are live.
+`anim_author_capabilities({})` FIRST — UEFN builds vary; the probe reports
+`level_sequence_route`, `anim_sequence_route`, `bake_sequence_route`, and
+`additive_route`.
 
-## Route 1 — Verse prop animation (moving platforms, doors, hazards)
+Whatever the route, an authored clip does nothing in game until something plays
+it: `skill_read_subskill("animation", "runtime_playback")`. Player body clips:
+`skill_read_subskill("animation", "player_animation")`.
 
-Fully code-authored at runtime, no editor assets. The API (verify exact
-signatures via `search_verse_digest` / `get_verse_api`):
+## Route 1 — Control Rig in a Level Sequence, then bake
+
+Authoring the rig itself is editor UI (no MCP tool drives Control Rig controls);
+the bake at the end is scripted.
+
+1. Content Drawer → right-click → **Cinematics → Level Sequence**. Open it,
+   **Add Actor** → the target skeletal mesh (`create_level_sequence` +
+   `add_sequence_binding` do the same thing headlessly).
+2. On the actor track: **Control Rig → Control Rig Classes → FK Control Rig**.
+   Turn **Animation Mode** on and **Game View off (G)** or the controls are invisible.
+3. Select a control, move/rotate, key it (Enter or the key button).
+4. Return to the start pose: Ctrl+C the first key, move the playhead to the end,
+   Ctrl+V. Identical keys at two times = no motion between them.
+5. Walk/run cycles: opposite arm with opposite leg; extremes at the ends, rest
+   pose keys midway.
+6. **Trim the playback range to the motion** — the bake covers the sequence
+   range, so a 5 s range around a 1.5 s action bakes 3.5 s of nothing.
+7. Bake:
+
+```
+bake_sequence_to_anim({"sequence_path": "/VideoTest/Cinematics/LS_Wave",
+    "actor_path": "FN_Mannequin",            # Outliner label of the bound actor
+    "dest_folder": "/VideoTest/Anims", "name": "AS_Wave"})
+get_anim_sequence_info({"anim_path": "/VideoTest/Anims/AS_Wave"})   # verify frames/bones
+```
+
+If the tool reports `available: false`, do the same thing in the editor:
+right-click the actor track → **Bake Animation Sequence**. Either way the output
+is a plain AnimSequence that shows up in Animation to Play, Animated Mesh
+devices, AnimPresets, and Verse `@editable` slots.
+
+**Editing an imported clip** (route 2) with Control Rig: right-click the
+animation track → **Bake to Control Rig** → FK Control Rig with **Reduce Keys
+enabled** — raw imports are key-dense and unusable without it. Then edit or
+delete per-bone keys and bake back out.
+
+### Route 1b — Layered Control Rig (additive player overlays)
+
+For clips that should **layer on top of** Fortnite player locomotion (arm wave,
+root scale giant/tiny), not replace the whole body:
+
+1. Level Sequence → add **M_Medium_Base** (invisible mesh; bones are there).
+2. **+ → Control Rig** → turn **Filter by Asset Skeleton OFF**, turn
+   **Layered ON** → pick FX Control Rig or Body Rig.
+3. Layered rigs store **deltas** (0 rotation / scale 1 = no change) and are
+   non-destructive on top of another animation track.
+4. Key everything first; move only the bones that should differ; bake
+   (`bake_sequence_to_anim` or track → Bake Animation Sequence).
+5. Flip additive so Verse overlays instead of replacing:
+
+```
+set_anim_additive_type({"anim_paths": ["/YourProject/Anims/AS_ArmUp"],
+    "additive_type": "local_space"})
+get_anim_sequence_info({"anim_path": "/YourProject/Anims/AS_ArmUp"})
+```
+
+Editor fallback: Asset Actions → Edit Selection in Property Matrix →
+**Additive Anim Type → Local Space** → Save.
+
+Play on the player with Verse `GetPlayAnimationController` — full device and
+limits: `skill_read_subskill("animation", "player_animation")`.
+
+## Route 2 — FBX / Mixamo import
+
+- Mixamo export: **In Place checked**, **FBX With Skin**, **60 FPS**. Without
+  In Place, root motion fights any Transform track you add later.
+- First import: **Import All** creates the skeletal mesh plus the animation.
+- More animations for a skeleton you already have: in the import dialog set the
+  **target skeleton to the existing one** — otherwise you get a second, parallel
+  skeleton and none of your clips interoperate.
+- An imported clip is unusable on any other skeleton until retargeted:
+  `skill_read_subskill("animation", "retargeting")`.
+
+## Route 3 — AnimSequence bone keys (simple authored motion)
+
+For waves, nods, idles, poses — directly on a skeleton, no Sequencer:
+
+```
+list_skeleton_bones({"skeletal_mesh_path": ".../SomeMesh"})        # exact bone names
+create_anim_sequence({"skeletal_mesh_path": ".../SomeMesh",
+    "dest_folder": "/VideoTest/Anims", "name": "AS_Wave",
+    "length_seconds": 1.5, "fps": 30})
+set_anim_bone_keys({"anim_path": ".../AS_Wave",
+    "bone": "Bip001-R-UpperArm", "keys": [
+      {"time": 0.0, "rotation": [0,0,0]},
+      {"time": 0.75, "rotation": [0,0,70]},
+      {"time": 1.5, "rotation": [0,0,0]}]})
+get_anim_sequence_info({"anim_path": ".../AS_Wave"})               # verify tracks
+```
+
+- Transforms are **bone-local** (relative to the parent bone) — key rotations on
+  limb bones, not world positions.
+- Sparse keys are fine: the tool resamples linearly to every frame (the raw
+  engine call crashes on array-length mismatches; the tool guarantees safety).
+- Complex full-body motion is still better retargeted or Control-Rig authored —
+  hand-keying 20 bones rarely beats a converted clip.
+
+## Route 4 — Verse prop animation (moving platforms, doors, hazards)
+
+Fully code-authored at runtime, no editor assets, props only (transform, not
+bones). Verify exact signatures via `search_verse_digest` / `get_verse_api`:
 
 ```verse
 if (AC := MyProp.GetAnimationController[]):
@@ -48,7 +153,7 @@ Rules that bite:
 - Interpolation: `Linear`, `EaseIn`, `EaseOut`, `EaseInOut`, or custom cubic
   bezier params. Linear looks robotic — default to eased.
 
-## Route 2 — Level Sequences (cutscenes, camera moves, choreography)
+## Route 5 — Level Sequences (cutscenes, camera moves, choreography)
 
 ```
 anim_author_capabilities({})                                       # probe
@@ -68,8 +173,7 @@ get_sequence_info({"sequence_path": ".../LS_Intro"})               # verify keys
   `time` is seconds; omit a property to leave its channels unkeyed.
 - The tool auto-extends the section range over all keys — the raw engine
   silently drops keys outside the range, so don't hand-edit ranges downward.
-- **Playback is the Cinematic Sequence device**: place one, set its Sequence
-  to the asset, wire/trigger it (Verse or a trigger device).
+- **Playback is the Cinematic Sequence device** (see `runtime_playback`).
 
 Cinematic device best practices (community-validated):
 
@@ -84,31 +188,15 @@ Cinematic device best practices (community-validated):
 - Animate ONLY what the shot needs; verify in a live session with 2+ players
   (state divergence and join-in-progress bugs don't show in editor preview).
 
-## Route 3 — AnimSequence bone keys (custom skeletal motion)
+## Blending and moving during a clip
 
-For simple authored motion — waves, nods, idles, poses — directly on a
-skeleton:
-
-```
-anim_author_capabilities({})                                       # probe
-list_skeleton_bones({"skeletal_mesh_path": ".../SomeMesh"})        # exact bone names
-create_anim_sequence({"skeletal_mesh_path": ".../SomeMesh",
-    "dest_folder": "/VideoTest/Anims", "name": "AS_Wave",
-    "length_seconds": 1.5, "fps": 30})
-set_anim_bone_keys({"anim_path": ".../AS_Wave",
-    "bone": "Bip001-R-UpperArm", "keys": [
-      {"time": 0.0, "rotation": [0,0,0]},
-      {"time": 0.75, "rotation": [0,0,70]},
-      {"time": 1.5, "rotation": [0,0,0]}]})
-get_anim_sequence_info({"anim_path": ".../AS_Wave"})               # verify tracks
-```
-
-- Transforms are **bone-local** (relative to the parent bone) — key rotations
-  on limb bones, not world positions.
-- Sparse keys are fine: the tool resamples linearly to every frame (the raw
-  engine call crashes on array-length mismatches; the tool guarantees safety).
-- Complex full-body motion is still better retargeted from an existing anim
-  (see retargeting) — hand-keying 20 bones rarely beats a converted clip.
+- Stack Animation tracks in Sequencer; drag the **top corner triangle of a clip**
+  to crossfade instead of hard-cutting between them.
+- Add a **Transform track** to move the actor while it animates. Key positions at
+  the exact frames of contact events (takeoff, landing) — timing mismatch reads
+  as foot sliding or teleporting.
+- Physics-driven motion is NOT a Sequencer job (props pushed by Sequencer do not
+  collide properly) — use the Prop Mover device instead.
 
 ## Animation design principles (any route)
 
@@ -125,3 +213,17 @@ get_anim_sequence_info({"anim_path": ".../AS_Wave"})               # verify trac
   poses 3–5 frames of stillness.
 - Loops need identical first/last poses AND matched velocity through the seam
   (mirror the easing on both ends).
+
+## Pitfalls
+
+| Symptom | Cause |
+|---------|-------|
+| Animation not offered on a mesh | Wrong skeleton — retarget it first |
+| Baked clip has 3 s of nothing | Sequence playback range was not trimmed before baking |
+| Imported Mixamo clip fights the Transform track | Exported without **In Place** |
+| Control Rig track unusable after Bake to Control Rig | **Reduce Keys** was off — raw imports are key-dense |
+| Limbs bend wrong after retarget | Retarget pose mismatch (A vs T) — fix the pose, not the chains |
+| Authored animation never plays in game | No runtime trigger wired (`runtime_playback`) |
+| Player overlay replaces walk instead of layering | Forgot Additive Local Space (`set_anim_additive_type`) or used a non-**Layered** Control Rig |
+| Layered rig "edits" wipe the underlying dance | Filter/Layered toggles wrong — enable **Layered**, disable skeleton filter |
+| Island fails to publish | Built on the experimental Verse Scene Graph animation API |
