@@ -26,8 +26,8 @@ Always `anim_author_capabilities({})` first. Tool availability varies by UEFN bu
 
 ```
 anim_author_capabilities({})
-# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
-create_level_sequence({"dest_folder": "/VideoTest/Cinematics",
+# FIRST: get_project_info() → content_root (e.g. /MyProject/)
+create_level_sequence({"dest_folder": "/MyProject/Cinematics",
     "name": "LS_Intro", "fps": 30, "length_seconds": 8})
 add_sequence_binding({"sequence_path": ".../LS_Intro",
     "actor_path": "GateProp"})

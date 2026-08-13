@@ -5,7 +5,7 @@ description: "Create, import, retarget, bake, and PLAY custom skeletal animation
 license: Ducky Source-Available License v1.0
 metadata:
   label: UEFN Animation
-  version: 16
+  version: 17
   managed_by: uefn-ducky
   author: UEFN-Ducky
   copyright: Copyright 2026 UEFN-Ducky
@@ -77,16 +77,16 @@ all-in-one pipeline unless the case is the plain one.
 ## Retarget: the normal chain
 
 ```
-# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
+# FIRST: get_project_info() → content_root (e.g. /MyProject/)
 ik_retarget_capabilities({})                                  # PROBE
 create_ik_rig_asset({"skeletal_mesh_path": ".../SourceMesh",
-    "dest_folder": "/VideoTest/Retargeting", "name": "IK_Source"})        # -> preset_guess: "biped"
+    "dest_folder": "/MyProject/Retargeting", "name": "IK_Source"})        # -> preset_guess: "biped"
 get_retarget_preset({"name": "biped"})                        # READ -> root + chains
 set_retarget_root({"ik_rig_path": ".../IK_Source", "bone": "Bip001-Pelvis"})
 add_retarget_chains({"ik_rig_path": ".../IK_Source", "chains": [ ...preset... ]})
 # repeat CREATE + CHANGE for the target mesh (IK_Target) ...
 create_ik_retargeter_asset({"source_ik_rig_path": ".../IK_Source",
-    "target_ik_rig_path": ".../IK_Target", "dest_folder": "/VideoTest/Retargeting",
+    "target_ik_rig_path": ".../IK_Target", "dest_folder": "/MyProject/Retargeting",
     "name": "RTG_Source_to_Target"})
 auto_map_retarget_chains({"ik_retargeter_path": ".../RTG_Source_to_Target"})
 retarget_animation({"ik_retargeter_path": ".../RTG_Source_to_Target",
@@ -116,7 +116,7 @@ call `add_retarget_chains`; verify with `get_ik_rig_info`; batch many anims in o
    Animation Mode on, Game View off).
 2. Trim the sequence playback range to the motion; the bake covers that range.
 3. `bake_sequence_to_anim({"sequence_path": "...", "actor_path": "MyMannequin",
-   "dest_folder": "/VideoTest/Anims", "name": "AS_Wave"})` — the scripted form of
+   "dest_folder": "/MyProject/Anims", "name": "AS_Wave"})` — the scripted form of
    right-click track → **Bake Animation Sequence**.
 4. Play it: `animated_mesh_capabilities({})` → `spawn_actor` the device →
    `configure_animated_mesh({"actor_path": "AnimMesh_Statue",
@@ -183,7 +183,7 @@ Full items-on-NPCs workflow: `skill_read_subskill("animation", "npc_items")`.
 - **Source and target chain names must match exactly** (`Spine`, `LeftArm`, …) or
   `auto_map_retarget_chains` can't pair them. The presets guarantee this.
 - **Paths use the project mount** from `get_project_info().content_root`
-  (e.g. `/VideoTest/Retargeting`) — never invent `/Game/...` for new assets.
+  (e.g. `/MyProject/Retargeting`) — never invent `/Game/...` for new assets.
   Omit `dest_folder` / pass empty to let the listener auto-pin.
 - **Never publish on Verse `PlaySkeletalAnimation`** (experimental Scene Graph
   animation): islands using it cannot be published, and enabling the flag renames

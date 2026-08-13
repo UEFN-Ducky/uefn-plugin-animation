@@ -24,8 +24,8 @@ by UE4 Mannequin" spam). So we add chains **explicitly**.
 Always start by reading the actual names:
 
 ```
-# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
-list_skeleton_bones({"skeletal_mesh_path": "/VideoTest/Corpse/Corpse_Sword"})
+# FIRST: get_project_info() → content_root (e.g. /MyProject/)
+list_skeleton_bones({"skeletal_mesh_path": "/MyProject/Characters/SKM_Source"})
 # -> {"preset_guess": "biped", "bones": ["Bip001-Pelvis","Bip001-Spine",...]}
 ```
 
@@ -54,7 +54,7 @@ to `get_retarget_preset` and feed its `chains` to `add_retarget_chains`
 `source_preset` / `target_preset = "auto"`). Chain **names are identical** across
 presets so any source maps to any target.
 
-**Biped** (root `Bip001-Pelvis`) — validated on Corpse_Sword:
+**Biped** (root `Bip001-Pelvis`) — validated on a typical Biped mesh:
 
 | Chain | Start | End |
 |-------|-------|-----|
@@ -79,14 +79,14 @@ that; it usually means a naming variant (e.g. `Bip001 Neck` with a space, or no
 ## 1 & 2. Source and target IK Rigs (create + change primitives)
 
 ```
-create_ik_rig_asset({"skeletal_mesh_path": "/VideoTest/Corpse/Corpse_Sword",
-  "dest_folder": "/VideoTest/Retargeting", "name": "IK_Corpse"})   # -> preset_guess: "biped"
+create_ik_rig_asset({"skeletal_mesh_path": "/MyProject/Characters/SKM_Source",
+  "dest_folder": "/MyProject/Retargeting", "name": "IK_Source"})   # -> preset_guess: "biped"
 get_retarget_preset({"name": "biped"})            # -> {root, chains}
-set_retarget_root({"ik_rig_path": "/VideoTest/Retargeting/IK_Corpse", "bone": "Bip001-Pelvis"})
-add_retarget_chains({"ik_rig_path": "/VideoTest/Retargeting/IK_Corpse", "chains": [ ...preset chains... ]})
+set_retarget_root({"ik_rig_path": "/MyProject/Retargeting/IK_Source", "bone": "Bip001-Pelvis"})
+add_retarget_chains({"ik_rig_path": "/MyProject/Retargeting/IK_Source", "chains": [ ...preset chains... ]})
 ```
 
-Repeat for the target (`IK_Archer`). If `preset_guess` is `unknown` (custom
+Repeat for the target (`IK_Target`). If `preset_guess` is `unknown` (custom
 skeleton), map bones yourself from `list_skeleton_bones` and pass them straight to
 `add_retarget_chains`:
 
@@ -102,10 +102,10 @@ Verify any rig with `get_ik_rig_info(ik_rig_path)`; fix one limb with
 ## 3. IK Retargeter (create + change primitives)
 
 ```
-create_ik_retargeter_asset({"source_ik_rig_path": "/VideoTest/Retargeting/IK_Corpse",
-  "target_ik_rig_path": "/VideoTest/Retargeting/IK_Archer",
-  "dest_folder": "/VideoTest/Retargeting", "name": "RTG_Corpse_to_Archer"})
-auto_map_retarget_chains({"ik_retargeter_path": "/VideoTest/Retargeting/RTG_Corpse_to_Archer"})
+create_ik_retargeter_asset({"source_ik_rig_path": "/MyProject/Retargeting/IK_Source",
+  "target_ik_rig_path": "/MyProject/Retargeting/IK_Target",
+  "dest_folder": "/MyProject/Retargeting", "name": "RTG_Source_to_Target"})
+auto_map_retarget_chains({"ik_retargeter_path": "/MyProject/Retargeting/RTG_Source_to_Target"})
 ```
 
 Auto-map pairs chains by identical name.
@@ -117,11 +117,11 @@ wrong angle, the two skeletons' **rest poses** disagree. Fix the pose on the
 retargeter — never rebuild chains for it, and never copy bones between skeletons.
 
 ```
-get_retarget_pose_info({"ik_retargeter_path": ".../RTG_Corpse_to_Archer"})
+get_retarget_pose_info({"ik_retargeter_path": ".../RTG_Source_to_Target"})
 # -> {"poses": ["Default"], "current_pose_offsets": {...}}
-create_retarget_pose({"ik_retargeter_path": ".../RTG_Corpse_to_Archer",
+create_retarget_pose({"ik_retargeter_path": ".../RTG_Source_to_Target",
     "name": "MatchSource"})                       # created on the target side, selected
-set_retarget_pose_bone_rotation({"ik_retargeter_path": ".../RTG_Corpse_to_Archer",
+set_retarget_pose_bone_rotation({"ik_retargeter_path": ".../RTG_Source_to_Target",
     "bone": "upperarm_l", "rotation": [0, 0, -45]})   # [pitch,yaw,roll] degrees
 set_retarget_pose_bone_rotation({"ik_retargeter_path": "...",
     "bone": "upperarm_r", "rotation": [0, 0, 45]})
@@ -140,9 +140,9 @@ retarget_animation({...})                         # re-bake, look, adjust
 ## 4. Bake the animation
 
 ```
-retarget_animation({"ik_retargeter_path": "/VideoTest/Retargeting/RTG_Corpse_to_Archer",
-  "source_mesh_path": "/VideoTest/Corpse/Corpse_Sword", "target_mesh_path": "/VideoTest/Archer/Archer",
-  "anim_paths": ["/VideoTest/Corpse/Corpse_Alert_Attack_Fast2"], "suffix": "_Retargeted"})
+retarget_animation({"ik_retargeter_path": "/MyProject/Retargeting/RTG_Source_to_Target",
+  "source_mesh_path": "/MyProject/Characters/SKM_Source", "target_mesh_path": "/MyProject/Characters/SKM_Target",
+  "anim_paths": ["/MyProject/Anims/AS_SourceAttack"], "suffix": "_Retargeted"})
 ```
 
 Pass every anim path in `anim_paths` to batch a whole folder through one retargeter.
@@ -151,7 +151,7 @@ Pass every anim path in `anim_paths` to batch a whole folder through one retarge
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| 0 chains / "used by UE4 Mannequin" spam | Biped skeleton + engine auto button | `get_retarget_preset("biped")` → `add_retarget_chains` — don't use the editor auto button |
+| 0 chains / "used by UE4 Mannequin" spam | Biped skeleton + engine auto button | `get_retarget_preset(name="biped")` → `add_retarget_chains` — don't use the editor auto button |
 | `preset_guess: unknown` | custom bone names | `list_skeleton_bones`, then pass explicit `chains` to `add_retarget_chains` |
 | chain in `chains_skipped` | start/end bone name variant | correct it, `add_retarget_chains(..., replace_existing=true)` |
 | `create_asset returned None` | bad `dest_folder` or name clash | check folder / pick a new name |

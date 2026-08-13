@@ -45,10 +45,10 @@ the bake at the end is scripted.
 7. Bake:
 
 ```
-bake_sequence_to_anim({"sequence_path": "/VideoTest/Cinematics/LS_Wave",
+bake_sequence_to_anim({"sequence_path": "/MyProject/Cinematics/LS_Wave",
     "actor_path": "FN_Mannequin",            # Outliner label of the bound actor
-    "dest_folder": "/VideoTest/Anims", "name": "AS_Wave"})
-get_anim_sequence_info({"anim_path": "/VideoTest/Anims/AS_Wave"})   # verify frames/bones
+    "dest_folder": "/MyProject/Anims", "name": "AS_Wave"})
+get_anim_sequence_info({"anim_path": "/MyProject/Anims/AS_Wave"})   # verify frames/bones
 ```
 
 If the tool reports `available: false`, do the same thing in the editor:
@@ -105,7 +105,7 @@ For waves, nods, idles, poses — directly on a skeleton, no Sequencer:
 ```
 list_skeleton_bones({"skeletal_mesh_path": ".../SomeMesh"})        # exact bone names
 create_anim_sequence({"skeletal_mesh_path": ".../SomeMesh",
-    "dest_folder": "/VideoTest/Anims", "name": "AS_Wave",
+    "dest_folder": "/MyProject/Anims", "name": "AS_Wave",
     "length_seconds": 1.5, "fps": 30})
 set_anim_bone_keys({"anim_path": ".../AS_Wave",
     "bone": "Bip001-R-UpperArm", "keys": [
@@ -157,8 +157,8 @@ Rules that bite:
 
 ```
 anim_author_capabilities({})                                       # probe
-# FIRST: get_project_info() → content_root (e.g. /VideoTest/)
-create_level_sequence({"dest_folder": "/VideoTest/Cinematics",
+# FIRST: get_project_info() → content_root (e.g. /MyProject/)
+create_level_sequence({"dest_folder": "/MyProject/Cinematics",
     "name": "LS_Intro", "fps": 30, "length_seconds": 8})
 add_sequence_binding({"sequence_path": ".../LS_Intro",
     "actor_path": "GateProp"})                                     # -> binding_name

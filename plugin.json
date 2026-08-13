@@ -1,7 +1,7 @@
 {
   "id": "animation",
   "kind": "plugin",
-  "version": "1.2.1",
+  "version": "1.2.3",
   "label": "UEFN Animation",
   "description": "IK retargeting with retarget-pose fixes, skeleton sockets, Level Sequence / AnimSequence authoring, sequence bake, additive AnimType for player overlays, and Animated Mesh device playback. Bundles the animation skill. Serial editor ops (one MCP call per turn).",
   "min_app_version": "1.0.655",

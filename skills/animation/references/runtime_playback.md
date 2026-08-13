@@ -28,8 +28,8 @@ animated_mesh_capabilities({})            # find the device asset + any already 
 spawn_actor({"asset_path": "/Game/Creative/.../AnimatedMesh_C"})
 set_actor_label({...})  set_actor_folder({...})        # organize as you place
 configure_animated_mesh({"actor_path": "AnimMesh_Statue",
-    "skeletal_mesh_path": "/VideoTest/Characters/SKM_Statue",
-    "anim_path": "/VideoTest/Anims/AS_Wave",
+    "skeletal_mesh_path": "/MyProject/Characters/SKM_Statue",
+    "anim_path": "/MyProject/Anims/AS_Wave",
     "loop": true, "play_rate": 1.0})
 save_current_level()
 ```
