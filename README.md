@@ -27,3 +27,7 @@ py backend/test_tools.py      # tool/manifest/listener wiring check
 ```
 
 Writes `deploy/animation-1.1.0.ducky-plugin.zip` (scripts/ and deploy/ are not packed).
+
+## License
+
+MIT. Copyright (c) 2026 Mindful Path Company, LLC. See [LICENSE](LICENSE).

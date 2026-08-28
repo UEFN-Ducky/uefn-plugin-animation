@@ -2,23 +2,31 @@
 source_plugin_id: animation
 name: animation
 description: "Create, import, retarget, bake, and PLAY custom skeletal animations in UEFN — Control Rig / Level Sequence authoring, Mixamo & FBX import, IK Rig + IK Retargeter with retarget-pose fixes, bake to AnimSequence, Animated Mesh device playback, player GetPlayAnimationController (full override + additive overlay), NPC AnimPresets, and skeleton sockets"
-license: Ducky Source-Available License v1.0
+license: MIT
 metadata:
   label: UEFN Animation
-  version: 17
+  version: 21
   managed_by: uefn-ducky
   author: UEFN-Ducky
-  copyright: Copyright 2026 UEFN-Ducky
-  allow_redistribute: false
+  copyright: Copyright 2026 Mindful Path Company, LLC
+  allow_redistribute: true
 ---
 
 # UEFN skeletal animation
 
+**Epic UEFN MCP:** Settings → MCPs → **UEFN MCP (Epic)** (`unreal-mcp`). Bridge tools: `unreal__list_toolsets` → `unreal__describe_toolset` → `unreal__call_tool` (toolsets — not flat `unreal__create_entity`). Map: `skill_read_subskill("uefn", "epic_mcp")`. Ducky tools below stay for this skill's domain when Epic does not cover it.
+
 **CRITICAL — editor mutations are SERIAL:** one heavy MCP call (`spawn_actor`,
-`set_actor_*`, `save_current_level`, bake/retarget tools) → wait → next. Never
+`set_actor_*`, `save_current_level`, bake/retarget tools, `npc_author_*`,
+`create_physics_asset_for_mesh`, `create_anim_preset`, `create_character_blueprint`,
+`create_npc_character_definition`, `duplicate_asset`) → wait → next. Never
 parallel or same-turn multi spawn/wire/save — freezes UEFN. A single tool may
 accept many `anim_paths` in **one** call (serial MCP, not parallel tools).
 Details: `skill_read_subskill("uefn", "batch_commands")`.
+
+`npc_author_capabilities` is a cheap `hasattr` + known-path `load_object`. If the
+listener is offline, STOP — do not retry it. Never fire it in the same turn as
+other listener/editor tools.
 
 UEFN is not full Unreal: AnimBlueprints, Montages, `AnimationLibrary`, and
 animation modifiers are not the path here. Authoring happens in Sequencer, the
@@ -51,21 +59,21 @@ or Verse** — never "press Play in Sequencer".
 | Cutscene / camera choreography | Level Sequence + Cinematic Sequence device | `create_level_sequence`, `add_transform_keys` |
 | Play a clip in game on a mesh | **Animated Mesh device** | `animated_mesh_capabilities`, `configure_animated_mesh` |
 | Play a clip on the **PLAYER** character | Verse `GetPlayAnimationController` (+ optional additive) | Verse + `set_anim_additive_type` |
-| NPC locomotion / attacks | AnimPreset + NPCCharacterDefinition | `npc_characters` reference |
+| NPC locomotion / attacks / custom creatures | AnimPreset + NPCCharacterDefinition **via tools** | `npc_characters`, `npc_ecosystem` |
 
-Probe first: `ik_retarget_capabilities({})` for the retarget family,
-`anim_author_capabilities({})` for the authoring/bake/additive family. Both
-report which routes this UEFN build actually exposes; if a route is false, the
-reference file names the editor-UI equivalent.
+Probe first (one listener tool per turn, only while the listener is online):
+`ik_retarget_capabilities({})` / `anim_author_capabilities({})` /
+`npc_author_capabilities({})`. If the listener is offline, STOP — do not retry
+those. NPC authoring never falls back to asking a human to click Details.
 
 ## The tools (flat MCP tools)
 
 | Kind | Tools |
 |------|-------|
-| **PROBE** | `ik_retarget_capabilities`, `anim_author_capabilities`, `animated_mesh_capabilities` |
-| **READ** | `list_skeleton_bones`, `get_retarget_preset`, `get_ik_rig_info`, `get_ik_retargeter_info`, `get_retarget_pose_info`, `get_sequence_info`, `get_anim_sequence_info`, `get_skeletal_mesh_info`, `list_skeleton_sockets` |
-| **CREATE** | `create_ik_rig_asset`, `create_ik_retargeter_asset`, `create_retarget_pose`, `create_level_sequence`, `create_anim_sequence` |
-| **CHANGE** | `set_retarget_root`, `add_retarget_chains`, `remove_retarget_chains`, `auto_map_retarget_chains`, `set_current_retarget_pose`, `set_retarget_pose_bone_rotation`, `set_retarget_pose_root_offset`, `add_sequence_binding`, `add_transform_keys`, `set_anim_bone_keys`, `set_anim_additive_type`, `add_skeleton_socket`, `remove_skeleton_socket` |
+| **PROBE** | `ik_retarget_capabilities`, `anim_author_capabilities`, `animated_mesh_capabilities`, `npc_author_capabilities` |
+| **READ** | `list_skeleton_bones`, `get_retarget_preset`, `get_ik_rig_info`, `get_ik_retargeter_info`, `get_retarget_pose_info`, `get_sequence_info`, `get_anim_sequence_info`, `get_skeletal_mesh_info`, `list_skeleton_sockets`, `list_npc_definitions`, `get_npc_definition_info` |
+| **CREATE** | `create_ik_rig_asset`, `create_ik_retargeter_asset`, `create_retarget_pose`, `create_level_sequence`, `create_anim_sequence`, `create_physics_asset_for_mesh`, `create_anim_preset`, `create_character_blueprint`, `create_npc_character_definition` |
+| **CHANGE** | `set_retarget_root`, `add_retarget_chains`, `remove_retarget_chains`, `auto_map_retarget_chains`, `set_current_retarget_pose`, `set_retarget_pose_bone_rotation`, `set_retarget_pose_root_offset`, `add_sequence_binding`, `add_transform_keys`, `set_anim_bone_keys`, `set_anim_additive_type`, `add_skeleton_socket`, `remove_skeleton_socket`, `set_anim_preset_slots`, `set_npc_definition_behavior`, `set_npc_definition_look`, `set_npc_spawner_definition` |
 | **BAKE** | `retarget_animation`, `bake_sequence_to_anim` |
 | **PLAY** | `configure_animated_mesh` |
 | **COMPOSE** | `retarget_animation_pipeline` (convenience only) |
@@ -221,8 +229,10 @@ Load with MCP `skill_read_subskill("animation", "<id>")` when needed. Do **not**
   Load when: An animation exists but nothing plays it, or choosing between device / preset / Verse playback
 - `retargeting` [plugin] — Step-by-step IK Rig + IK Retargeter workflow, the Biped-vs-Mannequin chain trap, retarget-pose (A-pose vs T-pose) fixes, and troubleshooting
   Load when: Retargeting an animation, building an IK Rig/Retargeter, or chains/preset came back unknown or skipped
-- `npc_characters` [plugin] — NPC character pipeline — restore old UE4 skeletons/anims, retarget, AnimPreset_BasicLocomotion, NPCCharacterDefinition modifiers, and wire npc_spawner_device
-  Load when: Building NPCCharacterDefinition assets, AnimPresets, restoring imported UE4 enemy packs, or wiring custom mesh NPCs to Verse behaviors
+- `npc_characters` [plugin] — Custom-mesh NPC pipeline: physics, AnimPreset, character Blueprint, NPCCharacterDefinition, spawner assign. Agent does every click.
+  Load when: Building NPCCharacterDefinition assets, AnimPresets, restoring imported UE4 packs, custom quadrupeds/creatures, or wiring custom mesh NPCs to Verse behaviors
+- `npc_ecosystem` [plugin] — Multi-species NPC patterns (session registries, FSMs, play-dead). Default: `verse_template_apply("npc_core")` then customize; `npc_ecosystem` is the optional cat+dog example.
+  Load when: Building two-species or NPC-to-NPC ecosystems (cats/dogs/creatures that see each other), play-dead, downed registries, or autonomous wander/follow/flee/hunt
 - `npc_items` [plugin] — Items/props on NPCs — create or find the item mesh, socket the skeleton, attach, verify, iterate; runtime-NPC caveats and the grant-vs-attach distinction
   Load when: Putting an item, prop, weapon, hat, or accessory on an NPC or any skeletal character
 - `sequencer_cinematics` [plugin] — Level Sequence cinematics — cine camera, cuts, spawnables vs possessables, Cinematic Sequence device wiring, multi-actor choreography
