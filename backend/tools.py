@@ -1,4 +1,4 @@
-"""Animation MCP tools — IK retargeting, retarget poses, authoring, runtime playback.
+"""Animation MCP tools — retargeting, authoring, playback, and custom-mesh NPCs.
 
 Every tool is a thin pass-through to a listener command shipped in this same
 plugin (``listener/``), so the whole animation surface updates through the Store
@@ -15,12 +15,16 @@ PLUGIN_ID = "animation"
 _INTENT = (
     r"\b(anim|animation|animate|retarget|ik\s*rig|ik\s*retargeter|retarget\s*pose|skeleton|skeletal|"
     r"socket|bone|sequencer|level\s*sequence|anim\s*sequence|animated\s*mesh|control\s*rig|mixamo|"
-    r"additive|player\s*anim)\b"
+    r"additive|player\s*anim|npc|npc\s*def|character\s*definition|anim\s*preset|animpreset|"
+    r"character\s*blueprint|cosmetic\s*spawn|creature|animal|pet|quadruped|ecosystem)\b"
 )
 
 # Bake / retarget round-trips walk every frame of every clip — the default bridge
 # timeout is sized for interactive edits, not for these.
 _BAKE_TIMEOUT = 600.0
+
+# Blueprint compiles and physics-asset generation run on the game thread.
+_NPC_AUTHOR_TIMEOUT = 300.0
 
 
 def _json(api: Any, command: str, params: dict[str, Any], *, pretty: bool = False, timeout: Optional[float] = None) -> str:
@@ -476,5 +480,225 @@ def register_tools(api: Any) -> None:
                 "play_rate": play_rate,
                 "save_level": save_level,
             },
+            pretty=pretty,
+        )
+
+    # --- custom-mesh NPCs: definitions, presets, character Blueprints -------
+    #
+    # A custom creature needs four assets an agent previously could not create:
+    # a Physics Asset, an AnimPreset, a character Blueprint, and the
+    # NPCCharacterDefinition tying them together. Build order:
+    #
+    #   create_physics_asset_for_mesh -> create_anim_preset ->
+    #   create_character_blueprint (one per variant) ->
+    #   create_npc_character_definition -> Verse build ->
+    #   set_npc_definition_behavior
+
+    @api.tool(intent=_INTENT)
+    def npc_author_capabilities(pretty: bool = False) -> str:
+        """Cheap probe: hasattr + known-path load. Never scans Fortnite Blueprints."""
+        return _json(api, "npc_author_capabilities", {}, pretty=pretty)
+
+    @api.tool(intent=_INTENT)
+    def list_npc_definitions(limit: int = 50, pretty: bool = False) -> str:
+        """List the project's NPCCharacterDefinition assets."""
+        return _json(api, "list_npc_definitions", {"limit": limit}, pretty=pretty)
+
+    @api.tool(intent=_INTENT)
+    def get_npc_definition_info(asset_path: str, pretty: bool = False) -> str:
+        """Read a definition's mesh/blueprint/preset/behavior + modifiers, and whether it spawns a custom mesh."""
+        return _json(api, "get_npc_definition_info", {"asset_path": asset_path}, pretty=pretty)
+
+    @api.tool(intent=_INTENT)
+    def create_physics_asset_for_mesh(
+        skeletal_mesh_path: str,
+        name: str = "",
+        dest_folder: str = "",
+        pretty: bool = False,
+    ) -> str:
+        """Create + assign a Physics Asset for a skeletal mesh that has none.
+
+        A skeletal mesh with no Physics Asset spawns as a T-pose that slides along
+        the ground — it reads as an animation bug but it is a missing asset.
+        """
+        return _json(
+            api,
+            "create_physics_asset_for_mesh",
+            {"skeletal_mesh_path": skeletal_mesh_path, "name": name, "dest_folder": dest_folder},
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def create_anim_preset(
+        name: str,
+        idle: str,
+        walk: str = "",
+        dest_folder: str = "",
+        play_rate: float = 1.0,
+        move_forward: str = "",
+        move_backward: str = "",
+        move_left: str = "",
+        move_right: str = "",
+        pretty: bool = False,
+    ) -> str:
+        """Create an AnimPreset_BasicLocomotion Blueprint; `walk` fills all four move slots.
+
+        NPC locomotion comes entirely from this preset — do not author an AnimBP.
+        Every clip must share the mesh's Skeleton or the NPC slides without animating.
+        """
+        return _json(
+            api,
+            "create_anim_preset",
+            {
+                "name": name,
+                "idle": idle,
+                "walk": walk,
+                "dest_folder": dest_folder,
+                "play_rate": play_rate,
+                "move_forward": move_forward,
+                "move_backward": move_backward,
+                "move_left": move_left,
+                "move_right": move_right,
+            },
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def set_anim_preset_slots(
+        asset_path: str,
+        idle: str = "",
+        walk: str = "",
+        play_rate: float = 1.0,
+        move_forward: str = "",
+        move_backward: str = "",
+        move_left: str = "",
+        move_right: str = "",
+        pretty: bool = False,
+    ) -> str:
+        """Set idle / move_* slots on an existing AnimPreset Blueprint (empty names untouched)."""
+        return _json(
+            api,
+            "set_anim_preset_slots",
+            {
+                "asset_path": asset_path,
+                "idle": idle,
+                "walk": walk,
+                "play_rate": play_rate,
+                "move_forward": move_forward,
+                "move_backward": move_backward,
+                "move_left": move_left,
+                "move_right": move_right,
+            },
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def create_character_blueprint(
+        name: str,
+        skeletal_mesh_path: str,
+        dest_folder: str = "",
+        material_path: str = "",
+        scale: float = 1.0,
+        pretty: bool = False,
+    ) -> str:
+        """Create a SkeletalMeshActor Blueprint with one mesh + material override + scale.
+
+        This is how one mesh becomes many visually distinct characters: same mesh,
+        same skeleton, same clips, a different material instance per variant.
+        """
+        return _json(
+            api,
+            "create_character_blueprint",
+            {
+                "name": name,
+                "skeletal_mesh_path": skeletal_mesh_path,
+                "dest_folder": dest_folder,
+                "material_path": material_path,
+                "scale": scale,
+            },
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def create_npc_character_definition(
+        name: str,
+        skeletal_mesh_path: str,
+        character_blueprint_path: str,
+        anim_preset_path: str,
+        behavior: str = "",
+        dest_folder: str = "",
+        max_health: float = 0.0,
+        pretty: bool = False,
+    ) -> str:
+        """Create a complete custom-mesh NPCCharacterDefinition ready to assign to a spawner.
+
+        Builds CharacterType_Custom, the CosmeticSpawn modifier (CHARACTER_BLUEPRINT
+        + ANIMATION_PRESET, which is what makes a custom mesh spawn instead of a
+        Fortnite outfit), and Health. Attaches `behavior` when the Verse class is
+        already compiled; otherwise build Verse then set_npc_definition_behavior.
+        """
+        return _json(
+            api,
+            "create_npc_character_definition",
+            {
+                "name": name,
+                "skeletal_mesh_path": skeletal_mesh_path,
+                "character_blueprint_path": character_blueprint_path,
+                "anim_preset_path": anim_preset_path,
+                "behavior": behavior,
+                "dest_folder": dest_folder,
+                "max_health": max_health,
+            },
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def set_npc_definition_behavior(asset_path: str, behavior: str, pretty: bool = False) -> str:
+        """Point a definition at a compiled Verse npc_behavior class (class name or CDO path).
+
+        Verse classes only exist after a successful Verse build, so this is a
+        separate step: create the assets, build Verse, then attach.
+        """
+        return _json(
+            api,
+            "set_npc_definition_behavior",
+            {"asset_path": asset_path, "behavior": behavior},
+            pretty=pretty,
+        )
+
+    @api.tool(intent=_INTENT)
+    def set_npc_definition_look(
+        asset_path: str,
+        character_blueprint_path: str = "",
+        anim_preset_path: str = "",
+        skeletal_mesh_path: str = "",
+        pretty: bool = False,
+    ) -> str:
+        """Retarget a definition's mesh / character BP / preset, mirroring the CosmeticSpawn modifier."""
+        return _json(
+            api,
+            "set_npc_definition_look",
+            {
+                "asset_path": asset_path,
+                "character_blueprint_path": character_blueprint_path,
+                "anim_preset_path": anim_preset_path,
+                "skeletal_mesh_path": skeletal_mesh_path,
+            },
+            pretty=pretty,
+            timeout=_NPC_AUTHOR_TIMEOUT,
+        )
+
+    @api.tool(intent=_INTENT)
+    def set_npc_spawner_definition(actor_path: str, definition_path: str, pretty: bool = False) -> str:
+        """Assign an NPCCharacterDefinition to a placed Character Spawner (Outliner label). Never ask a human."""
+        return _json(
+            api,
+            "set_npc_spawner_definition",
+            {"actor_path": actor_path, "definition_path": definition_path},
             pretty=pretty,
         )

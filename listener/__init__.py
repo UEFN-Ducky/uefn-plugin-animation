@@ -3,5 +3,6 @@
 from __future__ import annotations
 
 from . import animated_mesh as animated_mesh  # noqa: F401
+from . import npc_author as npc_author  # noqa: F401
 from . import retarget as retarget  # noqa: F401
 from . import sequencer as sequencer  # noqa: F401
