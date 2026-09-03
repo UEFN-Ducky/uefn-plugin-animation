@@ -19,7 +19,7 @@ that does. Pick by what is animating:
 | An NPC's locomotion + attacks | **AnimPreset + NPCCharacterDefinition** | Yes |
 | A Creative prop's transform (platform, door) | Verse `animation_controller` | Yes |
 | Editor preview only | Skeletal mesh actor's **Animation to Play** | n/a — not a runtime trigger |
-| Scene Graph entities | Verse `PlaySkeletalAnimation` | **No — experimental** |
+| Scene Graph entities | Verse `PlaySkeletalAnimation` | **No — still `@experimental`** on 42.10 |
 
 ## Animated Mesh device (the default answer)
 
@@ -42,7 +42,24 @@ save_current_level()
 - Device memory scales with the animation sets it references. Point it at baked
   clips you ship, not at a whole imported pack.
 - If `configure_animated_mesh` reports a field it could not match, it returns the
-  device's real option keys — set those with `set_creative_device_fields`.
+  device's real option keys — set those with Epic `DeviceToolset` `SetDeviceProperty`.
+
+### Scene Graph `PlaySkeletalAnimation` (Experimental, FN ≥ 4100)
+
+Digest signature, confirmed on 42.10 — still `@experimental`, so it blocks publishing:
+
+```verse
+(Entity:entity).PlaySkeletalAnimation(
+    Animation:skeletal_animation,
+    ?EaseInWindow:easing_window = …,
+    ?EaseOutWindow:easing_window = …
+)<transacts><decides>:play_skeletal_animation_result
+```
+
+It is failable — call it inside an `if`. 42.10 fixed looping Scene Graph animations
+appearing frozen at their end pose on clients (they played correctly on the server),
+and re-exposed `EaseOut` as experimental. For anything publishable use the Animated
+Mesh device, an AnimPreset, or `GetPlayAnimationController` on the player instead.
 
 ## Player character — GetPlayAnimationController
 

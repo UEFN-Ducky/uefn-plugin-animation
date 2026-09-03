@@ -72,9 +72,9 @@ APIs aren't exposed in your build, place actors and bind them (possessable).
 
 Playback is **not** "press play in Sequencer" for players — it's the device:
 
-1. Place **Cinematic Sequence** device (`find_devices` / Creative device list).
-2. Set Sequence asset to `LS_Intro` (`inspect_creative_device` →
-   `set_creative_device_fields` — use real field names from inspect).
+1. Place **Cinematic Sequence** device (`get_all_actors(label_filter=…)` (or Epic `DeviceToolset`) / Creative device list).
+2. Set Sequence asset to `LS_Intro` (Epic `DeviceToolset` `GetDeviceProperties` →
+   Epic `DeviceToolset` `SetDeviceProperty` — use real field names from inspect).
 3. **Auto Start off** unless intentional; one authoritative trigger (Verse or wire).
 4. Ending camera shots: prefer **Pause at end** over Stop (stuck-camera bugs).
 5. Props that should stay where the anim ended: When Finished → **Keep State**.
