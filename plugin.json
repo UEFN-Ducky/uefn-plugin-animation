@@ -1,7 +1,7 @@
 {
   "id": "animation",
   "kind": "plugin",
-  "version": "1.3.9",
+  "version": "1.3.10",
   "label": "UEFN Animation",
   "description": "IK retargeting with retarget-pose fixes, skeleton sockets, Level Sequence / AnimSequence authoring, sequence bake, additive AnimType for player overlays, Animated Mesh device playback, and custom-mesh NPC authoring (NPCCharacterDefinitions, AnimPresets, character Blueprints, physics assets) with no Content Browser clicks. Bundles the animation skill. Serial editor ops (one MCP call per turn).",
   "min_app_version": "1.0.655",

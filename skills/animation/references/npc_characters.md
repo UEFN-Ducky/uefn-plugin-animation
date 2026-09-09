@@ -205,8 +205,9 @@ set_npc_spawner_definition({
    arrays (`Triggers`, …) **one target per turn**. If the result is STALE
    REFLECTION, stop: the host already compiled + reloaded + retried once.
    Further `wire_*` calls cannot invent a hash. Poll `list_verse_types`, then
-   re-inspect; still no hash → re-place the device. Never loop. Never ask
-   the user to drag refs in Details.
+   re-inspect the **same** device and wire once. Never place a second copy of
+   the device (same stale class; the existing one gets the hashes when the
+   build lands). Never loop. Never ask the user to drag refs in Details.
 
 Navmesh: spawners carry `AthenaAIRequiresNavigation`. If NPCs stand still they
 have no navmesh — put them on walkable geometry.
