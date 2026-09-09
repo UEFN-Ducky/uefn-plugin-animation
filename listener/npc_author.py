@@ -19,8 +19,12 @@ inferred from docs):
     character_blueprint = BP_<Thing>_C      (SkeletalMeshActor + one mesh component)
     anim_preset         = AP_<Thing>_C      (AnimPreset_BasicLocomotion)
     animation_bp        = None              (locomotion comes from the preset)
-    behavior            = <instanced CharacterModifier_VerseBehavior_C>
-                            .npc_behavior_script -> CDO of the Verse behavior class
+    behavior            = stock CharacterModifier_DefaultBehavior_C until you
+                          call set_npc_definition_behavior (after Verse compile).
+                          DefaultBehavior has NO npc_behavior_script — reads must
+                          still succeed (kind=default). Verse attach REPLACES the
+                          modifier with CharacterModifier_VerseBehavior_C, then
+                          sets .npc_behavior_script -> CDO of the Verse class
     modifiers           = [ <CosmeticSpawn>, <Health> ]
 
 ``CharacterModifier_CosmeticSpawn`` is the part that makes a custom mesh spawn as
@@ -43,6 +47,11 @@ from typing import Any, Dict, List, Optional
 import unreal
 
 from listener.dispatch import register
+from listener.npc_behavior_slot import (
+    behavior_slot_info,
+    must_replace_behavior_modifier,
+    verse_behavior_class,
+)
 from listener.project_paths import pin_project_folder
 
 # Classes this whole surface depends on. Reported by npc_author_capabilities so a
@@ -403,13 +412,17 @@ def get_npc_definition_info(asset_path: str) -> dict:
     except Exception:
         pass
     if behavior is not None:
-        script = behavior.get_editor_property("npc_behavior_script")
-        out["behavior"] = {
-            "class": behavior.get_class().get_name(),
-            "npc_behavior_script": _path_of(script),
-        }
+        class_name = behavior.get_class().get_name()
+        script_path = None
+        # Stock DefaultBehavior has no npc_behavior_script — never fail the whole read.
+        if verse_behavior_class(class_name):
+            try:
+                script_path = _path_of(behavior.get_editor_property("npc_behavior_script"))
+            except Exception:
+                script_path = None
+        out["behavior"] = behavior_slot_info(class_name, script_path)
     else:
-        out["behavior"] = None
+        out["behavior"] = behavior_slot_info(None)
 
     mods = []
     try:
@@ -688,7 +701,8 @@ def create_npc_character_definition(
 def _attach_behavior(definition: Any, behavior: str) -> dict:
     cdo = _verse_behavior_cdo(behavior)
     modifier = definition.get_editor_property("behavior")
-    if modifier is None:
+    class_name = modifier.get_class().get_name() if modifier is not None else None
+    if must_replace_behavior_modifier(class_name):
         modifier = _new_subobject(_find_playset_class(_MOD_VERSE_BEHAVIOR), definition)
         definition.set_editor_property("behavior", modifier)
     modifier.set_editor_property("npc_behavior_script", cdo)
