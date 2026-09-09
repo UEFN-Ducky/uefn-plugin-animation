@@ -6,6 +6,8 @@ metadata:
   load_condition: "Building NPCCharacterDefinition assets, AnimPresets, restoring imported UE4 packs, custom quadrupeds/creatures, or wiring custom mesh NPCs to Verse behaviors"
 ---
 
+**Tool order (HARD):** 1) Official UEFN MCP first (`ducky_get_status` → `epic_mcp_online` → nested `unreal__*`). 2) Ducky listener second. 3) `execute_python` LAST — never a placement path, even if Epic and listener failed. Map: `skill_read_subskill("uefn", "epic_mcp")`.
+
 # NPC character definitions — zero human clicks
 
 **HARD:** never ask the user to create an AnimPreset, character Blueprint,
@@ -161,8 +163,7 @@ What the tool actually writes (verified live, not guessed):
 | `anim_preset` | `AP_*_C` |
 | `animation_bp` | null |
 | `character_parts` | `[]` (populated parts re-enter the Fortnite outfit path) |
-| `behavior.npc_behavior_script` | CDO of the Verse class (after compile) |
-| modifiers | CosmeticSpawn + Health |
+| `behavior.npc_behavior_script` | CDO of the Verse class — **only after** `set_npc_definition_behavior`. Fresh defs use DefaultBehavior (`kind=default`, script=null). That is success, not an error. |
 
 CosmeticSpawn **must** be:
 
@@ -173,7 +174,9 @@ CosmeticSpawn **must** be:
 
 That pair is what makes a custom quadruped spawn as itself instead of a
 Fortnite skin. `create_npc_character_definition` sets it. Verify with
-`get_npc_definition_info` → `spawns_custom_mesh: true`.
+`get_npc_definition_info` → `spawns_custom_mesh: true`. Ignore
+`behavior.kind=default` until you have compiled and called
+`set_npc_definition_behavior`.
 
 Variants: call `create_character_blueprint` + `create_npc_character_definition`
 once per material, or `duplicate_asset` a finished def then
@@ -195,11 +198,15 @@ set_npc_spawner_definition({
 })
 ```
 
-3. Place a VerseDevice running the spawn controller. After compile:
-   `get_verse_editables("Cat Spawn Controller")` → `STOP` must be false →
-   `wire_verse_device_ref` for each spawner slot. Stale hash: build Verse →
-   `reload_listener` → retry **once**. Never loop. Never ask the user to drag
-   refs in Details.
+3. Place a VerseDevice running the spawn controller. **Compile first**
+   (`workspace_compile_verse` succeeded — 10054 means wait, never retry). Then
+   `get_verse_editables` — only wire when the field has a `mangled_name`.
+   `wire_verse_device_ref` for scalar slots; `wire_verse_device_array` for
+   arrays (`Triggers`, …) **one target per turn**. If the result is STALE
+   REFLECTION, stop: the host already compiled + reloaded + retried once.
+   Further `wire_*` calls cannot invent a hash. Poll `list_verse_types`, then
+   re-inspect; still no hash → re-place the device. Never loop. Never ask
+   the user to drag refs in Details.
 
 Navmesh: spawners carry `AthenaAIRequiresNavigation`. If NPCs stand still they
 have no navmesh — put them on walkable geometry.

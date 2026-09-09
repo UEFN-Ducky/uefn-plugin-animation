@@ -6,6 +6,8 @@ metadata:
   load_condition: "Retargeting an animation, building an IK Rig/Retargeter, fixing a bad retarget pose, or chains/preset came back unknown or skipped"
 ---
 
+**Tool order (HARD):** 1) Official UEFN MCP first (`ducky_get_status` → `epic_mcp_online` → nested `unreal__*`). 2) Ducky listener second. 3) `execute_python` LAST — never a placement path, even if Epic and listener failed. Map: `skill_read_subskill("uefn", "epic_mcp")`.
+
 # IK Rig retargeting — the manual stages
 
 `retarget_animation_pipeline` runs all of this in one call. Do it by hand when a
