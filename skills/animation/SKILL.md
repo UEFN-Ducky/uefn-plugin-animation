@@ -5,7 +5,7 @@ description: "Create, import, retarget, bake, and PLAY custom skeletal animation
 license: MIT
 metadata:
   label: UEFN Animation
-  version: 24
+  version: 25
   managed_by: uefn-ducky
   author: UEFN-Ducky
   copyright: Copyright 2026 Mindful Path Company, LLC
@@ -14,15 +14,13 @@ metadata:
 
 # UEFN skeletal animation
 
-**Tool order (HARD):** 1) Official UEFN MCP first — `ducky_get_status`; when `epic_mcp_online` use nested `unreal__*` (`unreal__list_toolsets` → `unreal__describe_toolset` → `unreal__call_tool`; 5+ ops → ProgrammaticToolset `execute_tool_script`). 2) Ducky listener second (Epic-offline gaps + Ducky-only tools listed in this skill). 3) `execute_python` LAST — never a placement/layout path, even if Epic and listener already failed. Never spawn, move, or assign materials. Map: `skill_read_subskill("uefn", "epic_mcp")`.
-
 **CRITICAL — editor mutations are SERIAL:** one heavy MCP call (`spawn_actor`,
 `set_actor_*`, `save_current_level`, bake/retarget tools, `npc_author_*`,
 `create_physics_asset_for_mesh`, `create_anim_preset`, `create_character_blueprint`,
 `create_npc_character_definition`, `duplicate_asset`) → wait → next. Never
 parallel or same-turn multi spawn/wire/save — freezes UEFN. A single tool may
 accept many `anim_paths` in **one** call (serial MCP, not parallel tools).
-Details: `skill_read_subskill("uefn", "batch_commands")`.
+Details: SERIAL: one mutating/editor call per assistant message..
 
 `npc_author_capabilities` is a cheap `hasattr` + known-path `load_object`. If the
 listener is offline, STOP — do not retry it. Never fire it in the same turn as
@@ -252,3 +250,7 @@ Load with MCP `skill_read_subskill("animation", "<id>")` when needed. Do **not**
 **MetaHuman NPCs** (Creator / Mesh to MH / UEFN Export assemble / MH-specific
 physics + spawn): install the MetaHuman Store plugin, then
 `skill_read_subskill("metahuman", "npc_spawn")` (and pack core for create/assemble).
+
+## Verify
+
+`get_anim_sequence_info` / `get_npc_definition_info`. Never ask the user to start PIE.

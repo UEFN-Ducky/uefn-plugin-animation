@@ -178,7 +178,7 @@ def configure_animated_mesh(
             out["device_option_keys"] = sorted(settings.get("settings", {}).keys())
         except Exception as e:
             out["device_option_keys_error"] = str(e)
-        out["hint"] = "Set unmatched fields with set_creative_device_fields using a key from device_option_keys."
+        out["hint"] = "Set unmatched fields with Epic SetDeviceProperty (GetDeviceProperties for keys)."
     return out
 
 

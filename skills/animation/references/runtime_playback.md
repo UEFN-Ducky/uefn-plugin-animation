@@ -6,8 +6,6 @@ metadata:
   load_condition: "An animation asset exists but nothing plays it in game, or choosing between Animated Mesh device / Cinematic Sequence device / AnimPreset / Verse playback"
 ---
 
-**Tool order (HARD):** 1) Official UEFN MCP first (`ducky_get_status` → `epic_mcp_online` → nested `unreal__*`). 2) Ducky listener second. 3) `execute_python` LAST — never a placement path, even if Epic and listener failed. Map: `skill_read_subskill("uefn", "epic_mcp")`.
-
 # Playing an animation in game
 
 Authoring produces an AnimSequence. Nothing plays it until you place something
