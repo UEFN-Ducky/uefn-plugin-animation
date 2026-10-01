@@ -228,3 +228,10 @@ have no navmesh — put them on walkable geometry.
 
 If any step lacks a tool, **that is a bug in this skill** — do not invent a
 "please click in Details" instruction.
+
+## Talking NPCs and Sidekicks (42.30)
+
+An NPC Character Definition can also carry a **Persona Modifier** (LLM
+conversations: voice, personality, structured output) — verse `sys_conversations`,
+template `llm_npc`. One persona per character definition. 42.30 also fixed Sidekick
+style options not applying (they stayed on the default style).

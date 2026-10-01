@@ -129,3 +129,11 @@ Animated Mesh device, the Cinematic Sequence device, an AnimPreset, or player
 | Player clip overrides walk instead of overlaying | Additive Anim Type still No Additive — see `player_animation` |
 | Island fails validation / cannot publish | Built on the experimental Scene Graph animation API |
 | Memory warnings | Device references a whole animation pack — trim to baked clips |
+
+## Verse Skeletal Animation status (42.30)
+
+Verse Skeletal Animation (Experimental since 41.00) **stays Experimental**. Epic is
+building a **new API** to replace it and will not fix bugs in the current one; the
+current API will be deprecated later, so code built on it will need updating.
+For anything that must publish now, use the Animated Mesh device / Sequencer paths
+in this skill, and keep Verse skeletal-animation code in one small, replaceable file.

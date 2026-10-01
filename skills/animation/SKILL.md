@@ -5,7 +5,7 @@ description: "Create, import, retarget, bake, and PLAY custom skeletal animation
 license: MIT
 metadata:
   label: UEFN Animation
-  version: 25
+  version: 26
   managed_by: uefn-ducky
   author: UEFN-Ducky
   copyright: Copyright 2026 Mindful Path Company, LLC
@@ -254,3 +254,13 @@ physics + spawn): install the MetaHuman Store plugin, then
 ## Verify
 
 `get_anim_sequence_info` / `get_npc_definition_info`. Never ask the user to start PIE.
+
+## 42.30 notes
+
+- Epic `editor_toolset.toolsets.skeletal_mesh.SkeletalMeshTools` (bones, sockets,
+  materials) is available when `epic_mcp_online` — uefn `epic_toolsets`.
+- Skinned-mesh import fixed: inverse bind matrices resolve, bind poses no longer
+  drift from the scene hierarchy, multi-root skinned files import.
+- Ability templates' animation span uses `AnimationSequence` + `play_animation_layer`
+  (scenegraph `template_abilities`).
+- Verse Skeletal Animation stays Experimental; a new API is coming (`runtime_playback`).
