@@ -47,7 +47,10 @@ from typing import Any, Dict, List, Optional
 import unreal
 
 from listener.dispatch import register
-from listener.npc_behavior_slot import (
+
+# Relative: this module ships beside npc_author in the plugin overlay
+# (listener.plugins.animation), not in the host listener package.
+from .npc_behavior_slot import (
     behavior_slot_info,
     must_replace_behavior_modifier,
     verse_behavior_class,
